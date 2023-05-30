@@ -1,0 +1,32 @@
+optimove_apis = {
+'unsubscribers_list':{
+'cols':['Email','UnsubscribedTime'],
+'url': 'https://api4.optimove.net/current/optimail/Getunsubscribers?BrandID=10'
+},
+'customersByValueSegment':{
+'cols':['CustomerID','CustomerAttributes'],
+'url': 'https://api4.optimove.net/current/segments/GetCustomersByValueSegment?ValueSegmentID=3&CustomerAttributes=Alias;Country',
+'array_col': 'CustomerAttributes'
+},
+'valueSegmentChangers':{
+'cols':['CustomerID','InitialValueSegmentID','FinalValueSegmentID','CustomerAttributes'],
+'url': 'https://api4.optimove.net/current/segments/GetValueSegmentChangers?StartDate=2020-03-16&EndDate=2020-03-17&CustomerAttributes=Alias;Country',
+'array_col': 'CustomerAttributes'
+},
+'executedCampaignDetails':{
+'cols':['CampaignID','TargetGroupID','CampaignType','Duration','LeadTime','Notes','IsMultiChannel','IsRecurrence','Status','Error'],
+'url': 'https://api4.optimove.net/current/actions/GetExecutedCampaignDetails?Date=2018-05-19'
+},
+'executionChannels':{
+'cols':['ChannelID','ChannelName'],
+'url': 'https://api4.optimove.net/current/actions/GetExecutionChannels'
+},
+'lifecycleStageList':{
+'cols':['StageID','StageName'],
+'url': 'https://api4.optimove.net/current/model/GetLifecycleStageList'
+},
+'customerSendDetailsByCampaign':{
+'cols':['CustomerID','ChannelID','ScheduledTime','SendID','TemplateID'],
+'url': 'https://api4.optimove.net/current/customers/GetCustomerSendDetailsByCampaign?CampaignID =65874&IncludeTemplateIDs=True'
+}
+}

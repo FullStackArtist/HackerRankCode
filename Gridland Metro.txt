@@ -1,0 +1,64 @@
+#!/bin/python3
+
+import math
+import os
+import random
+import re
+import sys
+
+#
+# Complete the 'gridlandMetro' function below.
+#
+# The function is expected to return an INTEGER.
+# The function accepts following parameters:
+#  1. INTEGER n
+#  2. INTEGER m
+#  3. INTEGER k
+#  4. 2D_INTEGER_ARRAY track
+#
+
+def gridlandMetro(n, m, k, track):
+    l=[]
+    count=0
+    for i in range(0,n):
+        p=[0]*m
+        l.append(p)
+
+    for i in range(0,k):
+        track[i][1]=track[i][1]-1
+        track[i][0]=track[i][0]-1
+    for j in track:
+        for a in range(j[1],j[2]):
+            l[j[0]][a]=-1
+    
+    for i in l:
+        for j in i:
+            if j==0:
+                count=count+1
+    return count
+                   
+            
+            
+    # Write your code here
+
+if __name__ == '__main__':
+    fptr = open(os.environ['OUTPUT_PATH'], 'w')
+
+    first_multiple_input = input().rstrip().split()
+
+    n = int(first_multiple_input[0])
+
+    m = int(first_multiple_input[1])
+
+    k = int(first_multiple_input[2])
+
+    track = []
+
+    for _ in range(k):
+        track.append(list(map(int, input().rstrip().split())))
+
+    result = gridlandMetro(n, m, k, track)
+
+    fptr.write(str(result) + '\n')
+
+    fptr.close()

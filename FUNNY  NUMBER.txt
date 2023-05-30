@@ -1,0 +1,47 @@
+#!/bin/python3
+
+import math
+import os
+import random
+import re
+import sys
+
+#
+# Complete the 'funnyString' function below.
+#
+# The function is expected to return a STRING.
+# The function accepts STRING s as parameter.
+#
+
+def funnyString(s):
+    ls=[]
+    lr=[]
+    flag=0
+    for i in range(0,len(s)):
+        ls.append(ord(s[i]))
+        lr.append(ord(s[len(s)-i-1]))
+    for i in range(0,len(s)-1):
+        if abs(ls[i]-ls[i+1])==abs(lr[i]-lr[i+1]):
+            flag=1
+        else:
+            flag=0
+            break
+    if flag==1:
+        print("Funny")
+    else:
+        print("Not Funny")
+        
+        
+    # Write your code here
+
+if __name__ == '__main__':
+    
+
+    q = int(input().strip())
+
+    for q_itr in range(q):
+        s = input()
+
+        result = funnyString(s)
+
+

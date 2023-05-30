@@ -1,0 +1,168 @@
+[Yesterday 10:55] Narayana Yalla
+
+
+
+
+optimove_api_extract.py
+
+ 
+
+ 
+
+ 
+
+import pendulum
+import pandas as pd
+from io import StringIO
+from typing import List
+
+from airflow.decorators import dag, task
+from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
+
+from data_transformations.lib import optimove
+
+from gala.utils import args, config, callbacks
+from gala.operators.http_to_s3 import HttpToS3Operator
+
+from pandas.core.frame import DataFrame
+
+import optimove_config
+from urllib.parse import urlparse, parse_qs
+
+doc_md = """
+# Optimove S3 to Snowflake DAG
+#### Runbook
+If any of the tasks fail, you can retry them and if they are still failing open a support ticket with Optimove [here](https://optimoveww.zendesk.com/hc/en-us/requests).
+#### Operation
+1. Call Optimove login API to get the authentication token
+2. Pass the token to the required Optimove APIs and store the data as CSV in S3 bucket
+3. Load the data from S3 to snowflake stage & tables
+"""
+
+OPTIMOVE_TOKEN_TASK_ID = "get_api_token"
+
+@task(task_id=OPTIMOVE_TOKEN_TASK_ID)
+def get_token_task():
+    return optimove.get_token_for_airflow()
+
+def get_arr_col_fields(api:str):
+    api_dict = get_api_dict(api)
+    arr_col = api_dict['array_col']
+
+    url = api_dict['url']
+    query_dict = parse_qs(urlparse(url).query)
+
+    """
+    If arr_col is not part of the config url then define a new list variable "array_col_fields" with the column names in order of the api response 
+    i.e. array_col_fields = ['Alias','Country']
+    """
+    if arr_col in query_dict:
+        arr_col_fields = query_dict[arr_col][0].split(";")
+    else:
+        arr_col_fields = api_dict['array_col_fields']
+
+    return arr_col, arr_col_fields
+
+def get_api_dict(api:str):
+    return optimove_config.optimove_apis[api]
+
+def split_array_to_cols(api:str,df:DataFrame):
+    api_dict = get_api_dict(api)
+    api_arr_col, api_arr_col_fields = get_arr_col_fields(api)
+
+    for index, field in enumerate(api_arr_col_fields):
+        df[field] = df[api_arr_col].map(lambda x: x[index])
+
+    api_cols = api_dict['cols']
+    api_cols.remove(api_arr_col)
+    req_cols = api_cols + api_arr_col_fields
+    return df[req_cols]
+
+def validate_process_api_data(api:str,df:DataFrame):
+    api_dict = get_api_dict(api)
+    match api_dict.get('array_col'):
+        case "" | None: return df
+        case _: return split_array_to_cols(api, df)
+
+def json_to_csv_string_converter(api:str,fields:List[str]):
+    def convert_response_to_csv_string(response):
+        parsed = response.json()
+        df = pd.DataFrame(parsed, dtype=object)
+        df = df[fields]
+
+        result_df = validate_process_api_data(api,df)
+
+        csv_buffer = StringIO()
+        result_df.to_csv(csv_buffer, index=False, header=False)
+
+        return csv_buffer.getvalue()
+
+    return convert_response_to_csv_string
+
+@dag(
+    default_args=args.get_dsea_default_args(),
+    schedule_interval=config.get_value_for_env(dev=None, test=None, prod="0 8 * * *"),
+    start_date=pendulum.datetime(2023, 4, 10, tz="America/New_York"),
+    on_failure_callback=callbacks.dag_failure_callback,
+    on_success_callback=callbacks.dag_success_callback,
+    catchup=False,
+    tags=["optimove"],
+    template_searchpath="dags/data_transformations/sql/optimove_to_snowflake/",
+)
+def optimove_extract():
+    target_schema = "OPTIMOVE"
+    target_db = config.get_value_for_env(
+    dev=None, test="FBG_SOURCE_UAT", prod="FBG_SOURCE"
+    )
+    stage = config.get_value_for_env(
+    dev=None,
+    test="FBG_DATA_OPTIMOVE_TEST_STAGE",
+    prod="FBG_DATA_OPTIMOVE_PROD_STAGE",
+    )
+
+    bucket_name = config.append_env("fbg-data-optimove-")
+
+    for api in optimove_config.optimove_apis:
+        api_dict = get_api_dict(api)
+        s3_prefix = f"optimove/{api}/{api}_"
+        s3_key = s3_prefix + "{{ ds }}.csv"
+
+        get_data = HttpToS3Operator(
+            task_id=f"get_{api}",
+            http_conn_id=None,
+            endpoint=optimove_config.optimove_apis[i]['url'],
+            method="GET",
+            headers={
+                "Authorization-Token": "{{ task_instance.xcom_pull(task_ids='"
+                + OPTIMOVE_TOKEN_TASK_ID
+                + "', key='return_value') }}"
+            },
+            response_filter=json_to_csv_string_converter(
+                api=api,fields=optimove_config.optimove_apis[i]['cols']
+            ),
+            replace_flag=True,
+            s3_conn_id="storage_aws_s3_audit",
+            s3_bucket=bucket_name,
+            s3_key=s3_key,
+            )
+
+        load_into_snowflake = SnowflakeOperator(
+            task_id=f"load_{api}",
+            sql=f"{api}.sql",
+            snowflake_conn_id="snowflake_default",
+            warehouse="ETL_XSM_WH",
+            params={
+                "target_db": target_db,
+                "target_schema": target_schema,
+                "stage": stage,
+                "file_path": s3_prefix,
+            },
+        )
+
+        get_token_task() >> get_data >> load_into_snowflake
+
+dag = optimove_extract()
+
+ 
+
+
